@@ -3,6 +3,7 @@
 import sys
 
 from bisect import bisect
+from inspect import signature
 
 try:
     from pyroute2 import NDB as DB
@@ -14,10 +15,11 @@ BASE_OID = '.1.3.6.1.2.1.31.1.1.1.18'
 
 def oid_to_ifidx(oid):
     """
-    Convert an OID string to an interface index while checking it for conformity
+    Convert an OID string to an interface index
 
     The OID has to be rooted at the BASE_OID, otherwise a ValueError is thrown.
-    A ValueError is also thrown when the last portion of the OID is not numeric.
+    A ValueError is also thrown when the last portion of the OID is not numeric
+    (all other elements have to be numeric due to the check against BASE_OID)
 
     If only the BASE_OID is passed, 0 is returned.
 
@@ -68,37 +70,63 @@ def get_next_ifidx(ifidxs, ifidx):
     return sorted_ifidxs[bisect(sorted_ifidxs, ifidx)]
 
 
+class SNMPCommandHandler:
+    def __init__(self, db):
+        self.db = db
+
+    def get_ifalias(self, ifidx):
+        try:
+            iface = self.db.interfaces[{'index': ifidx}]
+        except TypeError:
+            iface = self.db.interfaces[ifidx]
+        ifalias = iface['ifalias'] or ''
+        return f'{BASE_OID}.{ifidx}\nstring\n{ifalias}'
+
+    def handle(self, cmd, args):
+        """
+        Call handle_{cmd} with the next elements from args as arguments
+
+        For example if cmd is PING then handle_PING needs 0 arguments, hence
+        args is not used at all and self.handle_PING() is called.
+
+        If cmd is set then the next two elements from args (with .rstrip()
+        called on them) are used as the two arguments to self.handle_set(...)
+        """
+        try:
+            handler = getattr(self, f'handle_{cmd}')
+        except AttributeError:
+            sys.exit(1)
+        sig = signature(handler)
+        try:
+            return handler(*(
+                next(args).rstrip() for parameter in sig.parameters
+            ))
+        except (ValueError, IndexError, KeyError):
+            return 'NONE'
+
+    @staticmethod
+    def handle_PING():
+        return 'PONG'
+
+    def handle_set(self, oid, value):
+        return 'not-writable'
+
+    def handle_get(self, oid):
+        return self.get_ifalias(oid_to_ifidx(oid))
+
+    def handle_getnext(self, oid):
+        ifidx = get_next_ifidx(
+            (iface['index'] for iface in self.db.interfaces.values()),
+            oid_to_ifidx(oid),
+        )
+        return self.get_ifalias(ifidx)
+
+
 def main():
     with DB() as db:
+        handler = SNMPCommandHandler(db)
         for cmd in sys.stdin:
-            cmd = cmd.rstrip()
-            if cmd == 'PING':
-                print('PONG')
-                continue
-
-            oid = sys.stdin.readline().rstrip()
-            if cmd == 'set':
-                # The next line contains the value that we would be supposed to
-                # set - if we supported writes
-                sys.stdin.readline()
-                print('not-writable')
-                continue
-
-            try:
-                ifidx = oid_to_ifidx(oid)
-                if cmd == 'getnext':
-                    ifidx = get_next_ifidx(
-                        (iface['index'] for iface in db.interfaces.values()),
-                        ifidx,
-                    )
-                try:
-                    iface = db.interfaces[{'index': ifidx}]
-                except TypeError:
-                    iface = db.interfaces[ifidx]
-                ifalias = iface['ifalias'] or ''
-                print(f'{BASE_OID}.{ifidx}\nstring\n{ifalias}')
-            except (ValueError, IndexError, KeyError):
-                print('NONE')
+            print(handler.handle(cmd.rstrip(), sys.stdin))
 
 
 if __name__ == '__main__':
