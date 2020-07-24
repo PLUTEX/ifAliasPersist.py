@@ -4,7 +4,10 @@ import sys
 
 from bisect import bisect
 
-from pyroute2 import NDB
+try:
+    from pyroute2 import NDB as DB
+except ImportError:
+    from pyroute2 import IPDB as DB
 
 BASE_OID = '.1.3.6.1.2.1.31.1.1.1.18'
 
@@ -43,13 +46,13 @@ def oid_to_ifidx(oid):
     return int(oid[len(BASE_OID) + 1:])
 
 
-def get_next_ifidx(ndb, ifidx):
-    sorted_ifidxs = sorted(iface['index'] for iface in ndb.interfaces)
+def get_next_ifidx(ifidxs, ifidx):
+    sorted_ifidxs = sorted(ifidxs)
     return sorted_ifidxs[bisect(sorted_ifidxs, ifidx)]
 
 
 def main():
-    with NDB() as ndb:
+    with DB() as db:
         for cmd in sys.stdin:
             cmd = cmd.rstrip()
             if cmd == 'PING':
@@ -67,8 +70,15 @@ def main():
             try:
                 ifidx = oid_to_ifidx(oid)
                 if cmd == 'getnext':
-                    ifidx = get_next_ifidx(ndb, ifidx)
-                ifalias = ndb.interfaces[{'index': ifidx}]['ifalias'] or ''
+                    ifidx = get_next_ifidx(
+                        (iface['index'] for iface in db.interfaces.values()),
+                        ifidx,
+                    )
+                try:
+                    iface = db.interfaces[{'index': ifidx}]
+                except TypeError:
+                    iface = db.interfaces[ifidx]
+                ifalias = iface['ifalias'] or ''
                 print(f'{BASE_OID}.{ifidx}\nstring\n{ifalias}')
             except (ValueError, IndexError, KeyError):
                 print('NONE')
