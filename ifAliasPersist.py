@@ -47,6 +47,23 @@ def oid_to_ifidx(oid):
 
 
 def get_next_ifidx(ifidxs, ifidx):
+    """
+    Returns the next greater interface index
+
+    The ifidx need not be an element of ifidxs, in which case the next bigger
+    index is returned.
+
+    If ifidx is the greates index, raises IndexError
+
+    >>> get_next_ifidx([1, 1, 3], 1)
+    3
+    >>> get_next_ifidx([1, 3], 2)
+    3
+    >>> get_next_ifidx([1, 3], 3)
+    Traceback (most recent call last):
+        ...
+    IndexError: list index out of range
+    """
     sorted_ifidxs = sorted(ifidxs)
     return sorted_ifidxs[bisect(sorted_ifidxs, ifidx)]
 
