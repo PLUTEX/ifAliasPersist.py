@@ -95,8 +95,9 @@ class SNMPCommandHandler:
         try:
             handler = getattr(self, f'handle_{cmd}')
         except AttributeError:
-            sys.exit(1)
+            raise RuntimeError("Unknown command: %s" % (cmd,))
         sig = signature(handler)
+        args = iter(args)
         try:
             return handler(*(
                 next(args).rstrip() for parameter in sig.parameters
