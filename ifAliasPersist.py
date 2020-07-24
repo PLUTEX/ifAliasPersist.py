@@ -127,7 +127,7 @@ def main():
     with DB() as db:
         handler = SNMPCommandHandler(db)
         for cmd in sys.stdin:
-            print(handler.handle(cmd.rstrip(), sys.stdin))
+            print(handler.handle(cmd.rstrip(), sys.stdin), flush=True)
 
 
 if __name__ == '__main__':
