@@ -56,7 +56,9 @@ def main():
 
             oid = sys.stdin.readline().rstrip()
             if cmd == 'set':
-                value = sys.stdin.readline()
+                # The next line contains the value that we would be supposed to
+                # set - if we supported writes
+                sys.stdin.readline()
                 print('not-writable')
                 continue
 
@@ -66,7 +68,7 @@ def main():
                     ifidx = get_next_ifidx(ndb, ifidx)
                 ifalias = ndb.interfaces[{'index': ifidx}]['ifalias'] or ''
                 print(f'{BASE_OID}.{ifidx}\nstring\n{ifalias}')
-            except (ValueError, IndexError, KeyError) as e:
+            except (ValueError, IndexError, KeyError):
                 print('NONE')
 
 
